@@ -618,10 +618,84 @@ class Aichess():
         # Final expected value (weighted average)
         return expected_value / total_weight
 
-    def minimaxGame(self, depthWhite,depthBlack):
-        
-        currentState = self.getCurrentState()        
-        # Your code here
+    def minimax_decision(self, state, depth, is_maximizing):
+        # Condición de parada: profundidad o jaque mate
+        if depth == 0 or self.isWhiteInCheckMate(state) or self.isBlackInCheckMate(state):
+            return self.heuristica(state, True)  # Valor desde el punto de vista de las blancas
+
+        if is_maximizing:  # Turno blancas
+            max_eval = -float('inf')
+            white_states = self.getListNextStatesW(self.getWhiteState(state))
+            for next_state in white_states:
+                full_state = next_state + self.getBlackState(state)
+                eval = self.minimax_decision(full_state, depth - 1, False)
+                max_eval = max(max_eval, eval)
+            return max_eval
+        else:  # Turno negras
+            min_eval = float('inf')
+            black_states = self.getListNextStatesB(self.getBlackState(state))
+            for next_state in black_states:
+                full_state = next_state + self.getWhiteState(state)
+                eval = self.minimax_decision(full_state, depth - 1, True)
+                min_eval = min(min_eval, eval)
+            return min_eval
+
+    def minimaxGame(self, depthWhite, depthBlack):
+        currentState = self.getCurrentState()
+        self.listVisitedStates = []
+        turn = 0  # 0: blancas, 1: negras
+
+        while True:
+            self.listVisitedStates.append(currentState)
+            self.newBoardSim(currentState)
+            self.chess.boardSim.print_board()
+
+            if self.isWhiteInCheckMate(currentState):
+                print("Checkmate! Black wins.")
+                break
+            if self.isBlackInCheckMate(currentState):
+                print("Checkmate! White wins.")
+                break
+
+            if turn == 0:  # Blancas
+                best_value = -float('inf')
+                best_move = None
+                white_states = self.getListNextStatesW(self.getWhiteState(currentState))
+                for next_state in white_states:
+                    full_state = next_state + self.getBlackState(currentState)
+                    # Evita estados repetidos
+                    if self.isSameState(full_state, currentState):
+                        continue
+                    value = self.minimax_decision(full_state, depthWhite - 1, False)
+                    if value > best_value:
+                        best_value = value
+                        best_move = full_state
+                if best_move is None or self.isSameState(best_move, currentState):
+                    print("No moves for White. Game over.")
+                    break
+                currentState = best_move
+            else:  # Negras
+                best_value = float('inf')
+                best_move = None
+                black_states = self.getListNextStatesB(self.getBlackState(currentState))
+                for next_state in black_states:
+                    full_state = next_state + self.getWhiteState(currentState)
+                    # Evita estados repetidos
+                    if self.isSameState(full_state, currentState):
+                        continue
+                    value = self.minimax_decision(full_state, depthBlack - 1, True)
+                    if value < best_value:
+                        best_value = value
+                        best_move = full_state
+                if best_move is None or self.isSameState(best_move, currentState):
+                    print("No moves for Black. Game over.")
+                    break
+                currentState = best_move
+
+            turn = 1 - turn  # Cambia de turno
+
+        print("Visited states:", len(self.listVisitedStates))
+        print("Minimal depth to target:", len(self.listVisitedStates) - 1)
 
 
     def alphaBetaPoda(self, depthWhite,depthBlack):
@@ -645,10 +719,10 @@ if __name__ == "__main__":
 
     # Load initial positions of the pieces
     TA = np.zeros((8, 8))
-    TA[7][0] = 2   
-    TA[7][5] = 6   
-    TA[0][7] = 8   
-    TA[0][5] = 12  
+    TA[7][0] = 2   # White Rook
+    TA[7][5] = 6   # White King
+    TA[0][7] = 8   # Black Rook
+    TA[0][5] = 12  # Black King  
 
     # Initialise board and print
     print("stating AI chess... ")
@@ -657,5 +731,5 @@ if __name__ == "__main__":
     aichess.chess.boardSim.print_board()
     
     # Run exercise 1
-    aichess.minimaxGame(4,4)
+    aichess.minimaxGame(3,3)
     # Add code to save results and continue with other exercises
