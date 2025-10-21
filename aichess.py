@@ -130,7 +130,7 @@ class Aichess():
         self.listVisitedStates = []
         self.listVisitedSituations = []
         self.pathToTarget = []
-        self.depthMax = 8;
+        self.depthMax = 8
         # Dictionary to reconstruct the visited path
         self.dictPath = {}
         # Prepare a dictionary to control the visited state and at which
@@ -640,6 +640,14 @@ class Aichess():
                 min_eval = min(min_eval, eval)
             return min_eval
 
+    def remove_captured_pieces(self, moving_side, moving_state, other_state):
+        # moving_state: lista de piezas que acaban de mover (blancas o negras)
+        # other_state: lista de piezas del otro bando
+        # Si una pieza del otro bando está en la misma posición que una del moving_state, se elimina (capturada)
+        positions = set((p[0], p[1]) for p in moving_state)
+        new_other_state = [p for p in other_state if (p[0], p[1]) not in positions]
+        return moving_state + new_other_state
+
     def minimaxGame(self, depthWhite, depthBlack):
         currentState = self.getCurrentState()
         self.listVisitedStates = []
@@ -662,8 +670,12 @@ class Aichess():
                 best_move = None
                 white_states = self.getListNextStatesW(self.getWhiteState(currentState))
                 for next_state in white_states:
-                    full_state = next_state + self.getBlackState(currentState)
-                    # Evita estados repetidos
+                    # Elimina piezas negras capturadas
+                    full_state = self.remove_captured_pieces(
+                        moving_side='white',
+                        moving_state=next_state,
+                        other_state=self.getBlackState(currentState)
+                    )
                     if self.isSameState(full_state, currentState):
                         continue
                     value = self.minimax_decision(full_state, depthWhite - 1, False)
@@ -679,8 +691,12 @@ class Aichess():
                 best_move = None
                 black_states = self.getListNextStatesB(self.getBlackState(currentState))
                 for next_state in black_states:
-                    full_state = next_state + self.getWhiteState(currentState)
-                    # Evita estados repetidos
+                    # Elimina piezas blancas capturadas
+                    full_state = self.remove_captured_pieces(
+                        moving_side='black',
+                        moving_state=next_state,
+                        other_state=self.getWhiteState(currentState)
+                    )
                     if self.isSameState(full_state, currentState):
                         continue
                     value = self.minimax_decision(full_state, depthBlack - 1, True)
@@ -696,7 +712,6 @@ class Aichess():
 
         print("Visited states:", len(self.listVisitedStates))
         print("Minimal depth to target:", len(self.listVisitedStates) - 1)
-
 
     def alphaBetaPoda(self, depthWhite,depthBlack):
         
