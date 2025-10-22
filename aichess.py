@@ -51,6 +51,15 @@ class Aichess():
         self.listVisitedStates = []
         self.listVisitedSituations = []
         self.pathToTarget = []
+        self.depthMax = 8;
+        # Dictionary to reconstruct the visited path
+        self.dictPath = {}
+        # Prepare a dictionary to control the visited state and at which
+        # depth they were found for DepthFirstSearchOptimized
+        self.dictVisitedStates = {}
+        self.currentStateW = self.chess.boardSim.currentStateW
+        self.currentStateB = self.chess.boardSim.currentStateB
+        self.checkMate = False
         self.currentStateW = self.chess.boardSim.currentStateW
         self.currentStateB = self.chess.boardSim.currentStateB
         self.checkMate = False
@@ -262,18 +271,132 @@ class Aichess():
         wrState = self.getPieceState(currentState, 2)
         brState = self.getPieceState(currentState, 8)
 
-        # Getting row and columns for each piece
-        filaBk = bkState[0]
-        columnaBk = bkState[1]
-        filaWk = wkState[0]
-        columnaWk = wkState[1]
+        # If the black king has been captured, this is not a valid configuration
+        if bkState is None:
+            return False
 
-        if wrState != None:
-            filaWr = wrState[0]
-            columnaWr = wrState[1]
+        # Check all possible moves for the black king and see if it can capture the white king
+        for bkPosition in self.getNextPositions(bkState):
+            if wkPosition == bkPosition:
+                # White king would be in check
+                return True
+
+        if brState is not None:
+            # Check all possible moves for the black rook and see if it can capture the white king
+            for brPosition in self.getNextPositions(brState):
+                if wkPosition == brPosition:
+                    return True
+
+        return False
+
+    def allWkMovementsWatched(self, currentState):
+
+        self.newBoardSim(currentState)
+        # In this method, we check if the white king is threatened by black pieces
+        # Get the current state of the white king
+        wkState = self.getPieceState(currentState, 6)
+        allWatched = False
+
+        # If the white king is on the edge of the board, it may be more vulnerable
+        if wkState[0] == 0 or wkState[0] == 7 or wkState[1] == 0 or wkState[1] == 7:
+            # Get the state of the black pieces
+            brState = self.getPieceState(currentState, 8)
+            blackState = self.getBlackState(currentState)
+            allWatched = True
+
+            # Get the possible future states for the white pieces
+            nextWStates = self.getListNextStatesW(self.getWhiteState(currentState))
+            for state in nextWStates:
+                newBlackState = blackState.copy()
+                # Check if the black rook has been captured. If so, remove it from the state
+                if brState is not None and brState[0:2] == state[0][0:2]:
+                    newBlackState.remove(brState)
+                state = state + newBlackState
+                # Move the white pieces to their new state
+                self.newBoardSim(state)
+                # Check if the white king is not threatened in this position,
+                # which implies that not all of its possible moves are under threat
+                if not self.isWatchedWk(state):
+                    allWatched = False
+                    break
+
+        # Restore the original board state
+        self.newBoardSim(currentState)
+        return allWatched
+
+
+    def isWhiteInCheckMate(self, currentState):
+        if self.isWatchedWk(currentState) and self.allWkMovementsWatched(currentState):
+            return True
+        return False
+    
+    # Helper method that checks if a black rook can be eliminated
+    def eliminarBlack(self, blackState, brState, successor):
+        self.newBoardSim(blackState)
+        newBlackState = blackState.copy()
         if brState != None:
-            filaBr = brState[0]
-            columnaBr = brState[1]
+            if len(successor) >= 2:
+                if brState[0:2] == successor[0][0:2] or brState[0:2] == successor[1][0:2]:
+                    newBlackState.remove(brState)
+            else:
+                if brState[0:2] == successor[0][0:2]:
+                    newBlackState.remove(brState)
+        return newBlackState
+    
+    # Helper method that checks if a white rook can be eliminated
+    def eliminarWhite(self, whiteState, wrState, successor):
+        self.newBoardSim(whiteState)
+        newWhiteState = whiteState.copy()
+        if wrState != None:
+            if len(successor) >= 2:
+                if wrState[0:2] == successor[0][0:2] or wrState[0:2] == successor[1][0:2]:
+                    newWhiteState.remove(wrState)
+            else:
+                if wrState[0:2] == successor[0][0:2]:
+                    newWhiteState.remove(wrState)
+        return newWhiteState
+
+    # Method to check checkMate cases to stop the algorithm
+    def isCheckMate(self, state):
+        self.newBoardSim(state)
+        brState = self.getPieceState(state, 8)
+        wrState = self.getPieceState(state, 2)
+        whiteState = self.getWhiteState(state)
+        blackState = self.getBlackState(state)
+
+        for successor in self.getListNextStatesW(whiteState):
+            successor += self.eliminarBlack(blackState, brState, successor)
+            if not self.isWatchedWk(successor):
+                self.newBoardSim(state)
+                return False
+
+        for successor in self.getListNextStatesB(blackState):
+            successor += self.eliminarWhite(whiteState, wrState, successor)
+            if not self.isWatchedBk(successor):
+                self.newBoardSim(state)
+                return False
+
+        return True
+
+    def heuristica(self, currentState, color):
+        # This method calculates the heuristic value for the current state.
+        # The value is initially computed from White's perspective.
+        # If the 'color' parameter indicates Black, the final value is multiplied by -1.
+
+        value = 0
+
+        bkState = self.getPieceState(currentState, 12)  # Black King
+        wkState = self.getPieceState(currentState, 6)   # White King
+        wrState = self.getPieceState(currentState, 2)   # White Rook
+        brState = self.getPieceState(currentState, 8)   # Black Rook
+
+        filaBk, columnaBk = bkState[0], bkState[1]
+        filaWk, columnaWk = wkState[0], wkState[1]
+
+        if wrState is not None:
+            filaWr, columnaWr = wrState[0], wrState[1]
+        if brState is not None:
+            filaBr, columnaBr = brState[0], brState[1]
 
         # We check if they killed the black tower
         if brState == None:
