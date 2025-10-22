@@ -479,7 +479,7 @@ class Aichess():
                     newWhiteState.remove(wrState)
         return newWhiteState
 
-    # Method to check checkMate cases to stop the algorithm
+    # Métode que comprova els casos de checkMate per aturar l'algorisme
     def isCheckMate(self, state):
         self.newBoardSim(state)
         brState = self.getPieceState(state, 8)
@@ -501,123 +501,135 @@ class Aichess():
 
         return True
 
-# ---------------------- MINIMAX START  --------------------------- #
+#### EX1 - MINIMAXGAME() ####
 
+    # Contiene toda la lógica para decidir y ejecutar un solo movimiento
     def _perform_turn(self, current_state, depth, is_white_turn):
         """
         Calcula y ejecuta el movimiento para el jugador actual.
         Devuelve el nuevo estado del tablero o None si el juego termina.
         """
-        # 1. Obtener el mejor movimiento usando Minimax
+        # Paso 1: Obtener el mejor movimiento usando Minimax
         next_state = self.minimax(current_state, depth, depth, is_white_turn)
 
-        # 2. Comprobar si hay jaque mate (no hay movimientos posibles)
+        # Paso 2: Comprobar si hay jaque mate (no hay movimientos posibles)
         if next_state is None:
             winner = "BLANCAS" if not is_white_turn else "NEGRAS"
             print(f"JAQUE MATE, GANAN LAS {winner}")
+            # Devuelve None para señalar el fin del juego
             return None
 
-        # 3. Comprobar si hay tablas por repetición
+        # Paso 3: Comprobar si hay tablas por repetición
         if self.isVisitedSituation(is_white_turn, self.copyState(next_state)):
             print("JUEGO EN TABLAS")
+            # Devuelve None para señalar el fin del juego
             return None
         
-        # Registrar la nueva situación para detectar repeticiones futuras
+        # Registramos la nueva situación para detectar repeticiones futuras
         self.listVisitedSituations.append((is_white_turn, self.copyState(next_state)))
 
-        # 4. Aplicar el movimiento en el tablero
+        # Paso 4: Ejecutamos el movimiento en el tablero
         moved_piece, new_piece_pos = self.getMovement(current_state, self.copyState(next_state))
         self.chess.move((moved_piece[0], moved_piece[1]), (new_piece_pos[0], new_piece_pos[1]))
         
         print(f"Movimiento de las {'Blancas' if is_white_turn else 'Negras'}:")
         self.chess.board.print_board()
 
+        # Paso 5: Devolvemos el nuevo estado del tablero
         return self.getCurrentState()
 
 
+    # Actua de manager de la partida
     def minimaxGame(self, depthWhite, depthBlack, playerTurn):
         """
         Inicia y gestiona la partida de ajedrez usando el algoritmo Minimax.
         """
+
+        # Paso 1: Preparar el escenario
         current_state = self.getCurrentState()
         print("Estado inicial del tablero:")
         self.chess.board.print_board()
 
-        # Bucle de juego principal
+        # Paso 2: Iniciar el bucle del juego
         while True:
-            # Comprobar condición de fin de partida antes de mover
+            # Paso 3: Comprobar si la partida ya ha terminado (estado CheckMate)
             if self.isCheckMate(current_state):
                 # Determinar el ganador basado en quién no puede moverse
                 winner = "NEGRAS" if playerTurn else "BLANCAS"
                 print(f"JAQUE MATE, GANAN LAS {winner}")
-                break
+                break # Rompemos el bucle y termina el juego
 
-            # Determinar la profundidad del árbol según el turno
+            # Paso 4: Decidimos que jugador mueve y con qué profundidad
             depth = depthWhite if playerTurn else depthBlack
             
-            # Ejecutar el turno del jugador actual
+            # Paso 5: Realizar el turno del jugador actual
             new_state = self._perform_turn(current_state, depth, playerTurn)
 
-            # Si el juego ha terminado (jaque mate o tablas), salir del bucle
+            # PAso 6: Revisamos si el turno resultó en el fin de juego
             if new_state is None:
+                # El juego terminó (por jaque mate o tablas), salir del bucle
                 break
 
+            # Paso 7: Actualizamos el estado actual del tablero
             current_state = new_state
-            # Cambiar el turno para el siguiente jugador
+            # Paso 8: Intercambiamos turno al siguiente jugador
             playerTurn = not playerTurn
 
+    # Calcula la mejor jugada posible
     def minimax(self, state, depth, depthColor, playerTurn):
-
-        # check if it is ternimal node or checkmate scenario to return static heuristic value
+        
+        # Caso base: si hemos llegado a la profundidad máxima o a un estado de jaque mate
         if depth == 0 or self.isCheckMate(state):
             return self.heuristica(state, playerTurn)
         
-        # variable that will contain the best movement to make
+        # Variable para almacenar el mejor estado encontrado
         maxState = None
 
-        # Maximizing player
+        # Lógica para el turno del jugador maximizador (Blancas)
         if playerTurn:
             currBestValue = float('-inf')
 
+            # Obtenemos los estados de las piezas para generar movimientos
             blackState = self.getBlackState(state)
             whiteState = self.getWhiteState(state)
             brState = self.getPieceState(state, 8)
 
-            # We see the successors only for the states in White
+            # Vemos los sucesores (cada posible movimiento) solo para los estados en Blanco
             for successor in self.getListNextStatesW(whiteState):
                 successor += self.eliminarBlack(blackState, brState, successor)
 
+                # Consideramos solo los estados que no ponen al rey blanco en jaque
                 if not self.isWatchedWk(successor):
-                    #self.newBoardSim(state)
+                    # Realizamos una llamada recursiva para minimax con el estado sucesor
                     bestValue = self.minimax(successor, depth - 1, depthColor, False)
-                    # check for best value and best movement if any
+                    # Comprobamos si encontramos un mejor valor y un mejor movimiento
                     if bestValue > currBestValue:
                         currBestValue = bestValue
                         maxState = successor
 
-        # Minimizing player
+        # Lógica del turno de las negras
         else:
-            # initialize minimizer
+            # Obtenemos los estados de las piezas
             currBestValue = float('inf')
             whiteState = self.getWhiteState(state)
             blackState = self.getBlackState(state)
             wrState = self.getPieceState(state, 2)
 
-            # We see the successors only for the states in Black
+            # Exploramos los sucesores y cada posible movimiento de las negras
             for successor in self.getListNextStatesB(blackState):
                 successor += self.eliminarWhite(whiteState, wrState, successor)
 
+                # Consideramos los movimientos legales
                 if not self.isWatchedBk(successor):
-                    #self.newBoardSim(state)
-                    # Recursively call minimax with the successor state
+                    # Realizamos una llamada recursiva para minimax con el estado sucesor
                     bestValue = self.minimax(successor, depth - 1, depthColor, True)
 
-                    # Update the best value and maxState if a better successor is found
+                    # Actualizamos el mejor valor y maxState si encontramos un mejor sucesor
                     if bestValue < currBestValue:
                         currBestValue = bestValue
                         maxState = successor
 
-        # if back to top level, return the best movement
+        # Si volvemos al nivel superior, devolvemos el mejor movimiento
         if depth == depthColor:
             return maxState
 
