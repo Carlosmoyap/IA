@@ -352,27 +352,59 @@ class Aichess():
         self.chess.moveSim(start[movedPieceStart], to[movedPieceTo])     
 
     def isWatchedBk(self, currentState):
-
         self.newBoardSim(currentState)
 
-        bkPosition = self.getPieceState(currentState, 12)[0:2]
+        bkState = self.getPieceState(currentState, 12)
+        if bkState is None:
+            # El rey negro no está en el tablero, no puede estar en jaque
+            return False
+        bkPosition = bkState[0:2]
+
         wkState = self.getPieceState(currentState, 6)
         wrState = self.getPieceState(currentState, 2)
 
-        # If the white king has been captured, this is not a valid configuration
+        # Si el rey blanco ha sido capturado, no es una configuración válida
         if wkState is None:
             return False
 
-        # Check all possible moves of the white king to see if it can capture the black king
+        # ¿Puede el rey blanco capturar al rey negro?
         for wkPosition in self.getNextPositions(wkState):
             if bkPosition == wkPosition:
-                # Black king would be in check
                 return True
 
         if wrState is not None:
-            # Check all possible moves of the white rook to see if it can capture the black king
+            # ¿Puede la torre blanca capturar al rey negro?
             for wrPosition in self.getNextPositions(wrState):
                 if bkPosition == wrPosition:
+                    return True
+
+        return False
+    
+    def isWatchedWk(self, currentState):
+        self.newBoardSim(currentState)
+
+        wkState = self.getPieceState(currentState, 6)
+        if wkState is None:
+            # El rey blanco no está en el tablero, no puede estar en jaque
+            return False
+        wkPosition = wkState[0:2]
+
+        bkState = self.getPieceState(currentState, 12)
+        brState = self.getPieceState(currentState, 8)
+
+        # Si el rey negro ha sido capturado, no es una configuración válida
+        if bkState is None:
+            return False
+
+        # ¿Puede el rey negro capturar al rey blanco?
+        for bkPosition in self.getNextPositions(bkState):
+            if wkPosition == bkPosition:
+                return True
+
+        if brState is not None:
+            # ¿Puede la torre negra capturar al rey blanco?
+            for brPosition in self.getNextPositions(brState):
+                if wkPosition == brPosition:
                     return True
 
         return False
@@ -645,15 +677,27 @@ class Aichess():
         # other_state: lista de piezas del otro bando
         # Si una pieza del otro bando está en la misma posición que una del moving_state, se elimina (capturada)
         positions = set((p[0], p[1]) for p in moving_state)
-        new_other_state = [p for p in other_state if (p[0], p[1]) not in positions]
-        return moving_state + new_other_state
+        new_other_state = []
+        for p in other_state:
+            # No eliminar el rey nunca
+            if (moving_side == 'white' and p[2] == 12) or (moving_side == 'black' and p[2] == 6):
+                new_other_state.append(p)
+            elif (p[0], p[1]) not in positions:
+                new_other_state.append(p)
+        return moving_state + new_other_state   
 
     def minimaxGame(self, depthWhite, depthBlack):
         currentState = self.getCurrentState()
         self.listVisitedStates = []
+        self.listVisitedSituations = []
         turn = 0  # 0: blancas, 1: negras
 
         while True:
+            # --- Añade comprobación de repetición de situación ---
+            if self.isVisitedSituation(turn == 0, self.copyState(currentState)):
+                print("Draw by repetition! Game over.")
+                break
+            self.listVisitedSituations.append((turn == 0, self.copyState(currentState)))
             self.listVisitedStates.append(currentState)
             self.newBoardSim(currentState)
             self.chess.boardSim.print_board()
