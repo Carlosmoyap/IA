@@ -503,39 +503,68 @@ class Aichess():
 
 # ---------------------- MINIMAX START  --------------------------- #
 
+    def _perform_turn(self, current_state, depth, is_white_turn):
+        """
+        Calcula y ejecuta el movimiento para el jugador actual.
+        Devuelve el nuevo estado del tablero o None si el juego termina.
+        """
+        # 1. Obtener el mejor movimiento usando Minimax
+        next_state = self.minimax(current_state, depth, depth, is_white_turn)
+
+        # 2. Comprobar si hay jaque mate (no hay movimientos posibles)
+        if next_state is None:
+            winner = "BLANCAS" if not is_white_turn else "NEGRAS"
+            print(f"JAQUE MATE, GANAN LAS {winner}")
+            return None
+
+        # 3. Comprobar si hay tablas por repetición
+        if self.isVisitedSituation(is_white_turn, self.copyState(next_state)):
+            print("JUEGO EN TABLAS")
+            return None
+        
+        # Registrar la nueva situación para detectar repeticiones futuras
+        self.listVisitedSituations.append((is_white_turn, self.copyState(next_state)))
+
+        # 4. Aplicar el movimiento en el tablero
+        moved_piece, new_piece_pos = self.getMovement(current_state, self.copyState(next_state))
+        self.chess.move((moved_piece[0], moved_piece[1]), (new_piece_pos[0], new_piece_pos[1]))
+        
+        print(f"Movimiento de las {'Blancas' if is_white_turn else 'Negras'}:")
+        self.chess.board.print_board()
+
+        return self.getCurrentState()
+
+
     def minimaxGame(self, depthWhite, depthBlack, playerTurn):
-        currentState = self.getCurrentState()
-        print("Initial state of all pieces: ", currentState)
+        """
+        Inicia y gestiona la partida de ajedrez usando el algoritmo Minimax.
+        """
+        current_state = self.getCurrentState()
+        print("Estado inicial del tablero:")
+        self.chess.board.print_board()
 
-        while not self.isCheckMate(currentState):
-            currentState = self.getCurrentState()
-            #self.newBoardSim(currentState)
+        # Bucle de juego principal
+        while True:
+            # Comprobar condición de fin de partida antes de mover
+            if self.isCheckMate(current_state):
+                # Determinar el ganador basado en quién no puede moverse
+                winner = "NEGRAS" if playerTurn else "BLANCAS"
+                print(f"JAQUE MATE, GANAN LAS {winner}")
+                break
 
-            # check player turn
-            if playerTurn:
-                movimiento = self.minimax(currentState, depthWhite, depthWhite, playerTurn)
-            else:
-                movimiento = self.minimax(currentState, depthBlack, depthBlack, playerTurn)
+            # Determinar la profundidad del árbol según el turno
+            depth = depthWhite if playerTurn else depthBlack
+            
+            # Ejecutar el turno del jugador actual
+            new_state = self._perform_turn(current_state, depth, playerTurn)
 
-            if (movimiento is None):
-                if(playerTurn == False):
-                    color = "BLANCAS"
-                else:
-                    color = "NEGRAS"
-                return print("JAQUE MATE, GANAN LAS ", color)
+            # Si el juego ha terminado (jaque mate o tablas), salir del bucle
+            if new_state is None:
+                break
 
-            #in case the pieces are repeting movements, stop 
-            if (self.isVisitedSituation(playerTurn, self.copyState(movimiento))):
-                return print("JUEGO EN TABLAS")
-
-            self.listVisitedSituations.append((playerTurn, self.copyState(movimiento)))
-
-            # make best movement and print on board
-            piece_moved = self.getMovement(currentState, self.copyState(movimiento))
-            self.chess.move((piece_moved[0][0], piece_moved[0][1]), (piece_moved[1][0], piece_moved[1][1]))
-            self.chess.board.print_board()
+            current_state = new_state
+            # Cambiar el turno para el siguiente jugador
             playerTurn = not playerTurn
-
 
     def minimax(self, state, depth, depthColor, playerTurn):
 
