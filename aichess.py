@@ -261,35 +261,6 @@ class Aichess():
 
         return [pieceState, pieceNextState]
 
-    def heuristica(self, currentState, color):
-        # In this method, we calculate the heuristics for both the whites and black ones
-        # The value calculated here is for the whites,
-        # but finally from verything, as a function of the color parameter, we multiply the result by -1
-        value = 0
-
-        bkState = self.getPieceState(currentState, 12)
-        wkState = self.getPieceState(currentState, 6)
-        wrState = self.getPieceState(currentState, 2)
-        brState = self.getPieceState(currentState, 8)
-
-        # If the black king has been captured, this is not a valid configuration
-        if bkState is None:
-            return False
-
-        # Check all possible moves for the black king and see if it can capture the white king
-        for bkPosition in self.getNextPositions(bkState):
-            if wkPosition == bkPosition:
-                # White king would be in check
-                return True
-
-        if brState is not None:
-            # Check all possible moves for the black rook and see if it can capture the white king
-            for brPosition in self.getNextPositions(brState):
-                if wkPosition == brPosition:
-                    return True
-
-        return False
-
     def allWkMovementsWatched(self, currentState):
 
         self.newBoardSim(currentState)
@@ -638,10 +609,183 @@ class Aichess():
     
     #### EX1 - MINIMAXGAME() ####
 
+    ### EX3 - ALPHABETAPODA ####
+
+    def alphaBetaPoda(self, depthWhite,depthBlack):
+        """
+        Gestiona una partida donde las Blancas usan Minimax y las Negras usan Alfa-Beta.
+        """
+        current_state = self.getCurrentState()
+        playerTurn = True  # Empiezan las blancas
+        print("Iniciando partida: Minimax (Blancas) vs Alfa-Beta (Negras)")
+        self.chess.board.print_board()
+
+        while not self.isCheckMate(current_state):
+            depth = depthWhite if playerTurn else depthBlack
+            
+            # Decidir qué algoritmo usar
+            if playerTurn: # Turno de las Blancas -> Minimax (sin poda)
+                print("Turno de las Blancas (Minimax)...")
+                # Llamamos a la función recursiva sin activar la poda para este turno
+                next_state = self._minimax_recursive(current_state, depth, depth, True, False, -float('inf'), float('inf'))
+            else: # Turno de las Negras -> Alfa-Beta (con poda)
+                print("Turno de las Negras (Alfa-Beta)...")
+                # Llamamos a la función recursiva activando la poda para este turno
+                next_state = self._minimax_recursive(current_state, depth, depth, False, True, -float('inf'), float('inf'))
+
+            # --- Lógica de fin de partida y actualización del tablero ---
+            if next_state is None:
+                winner = "NEGRAS" if playerTurn else "BLANCAS"
+                print(f"JAQUE MATE, GANAN LAS {winner}")
+                return
+
+            if self.isVisitedSituation(playerTurn, self.copyState(next_state)):
+                print("JUEGO EN TABLAS")
+                return
+            
+            self.listVisitedSituations.append((playerTurn, self.copyState(next_state)))
+
+            moved_piece, new_piece_pos = self.getMovement(current_state, self.copyState(next_state))
+            self.chess.move((moved_piece[0], moved_piece[1]), (new_piece_pos[0], new_piece_pos[1]))
+            self.chess.board.print_board()
+
+            current_state = self.getCurrentState()
+            playerTurn = not playerTurn
+        
+        # Si el bucle termina, es porque el jugador actual está en jaque mate
+        winner = "NEGRAS" if playerTurn else "BLANCAS"
+        print(f"JAQUE MATE, GANAN LAS {winner}")
+        
+    ### EX3 - ALPHABETAPODA ####
+
+    ### EX5 - expectimax ####
+    def expectimax(self, depthWhite, depthBlack, playerTurn):
+        """
+        Ejecuta una partida usando el algoritmo Expectimax para ambos jugadores.
+        """
+        current_state = self.getCurrentState()
+        print("Estado inicial de las piezas:", current_state)
+
+        while not self.isCheckMate(self.copyState(current_state)):
+            # Elegimos la profundidad según el turno
+            depth = depthWhite if playerTurn else depthBlack
+
+            # Calculamos el siguiente movimiento usando expectimax
+            next_state = self.expectimax_recursive(current_state, depth, depth, playerTurn)
+
+            print("Movimiento seleccionado:", next_state)
+            if next_state is None:
+                ganador = "BLANCAS" if not playerTurn else "NEGRAS"
+                print(f"JAQUE MATE, GANAN LAS {ganador}")
+                return
+
+            if self.isVisitedSituation(playerTurn, next_state):
+                print("JUEGO EN TABLAS")
+                return
+
+            self.listVisitedSituations.append((playerTurn, self.copyState(next_state)))
+            pieza, nueva_pos = self.getMovement(current_state, self.copyState(next_state))
+            self.chess.move((pieza[0], pieza[1]), (nueva_pos[0], nueva_pos[1]))
+            self.chess.board.print_board()
+            current_state = self.getCurrentState()
+            playerTurn = not playerTurn
+
+    def expectimax_recursive(self, state, depth, depthColor, is_white_turn):
+        """
+        Algoritmo expectimax recursivo.
+        """
+        if depth == 0 or self.isCheckMate(state):
+            return self.heuristica(state, is_white_turn)
+
+        mejor_estado = None
+
+        if is_white_turn:
+            mejor_valor = float('-inf')
+            blackState = self.getBlackState(state)
+            whiteState = self.getWhiteState(state)
+            brState = self.getPieceState(state, 8)
+
+            for sucesor in self.getListNextStatesW(whiteState):
+                sucesor += self.eliminarBlack(blackState, brState, sucesor)
+                if not self.isWatchedWk(sucesor):
+                    valor = self.expectimax_recursive(sucesor, depth - 1, depthColor, False)
+                    if valor > mejor_valor:
+                        mejor_valor = valor
+                        mejor_estado = sucesor
+
+            if depth == depthColor:
+                return mejor_estado
+            return mejor_valor
+
+        else:
+            valores = []
+            whiteState = self.getWhiteState(state)
+            blackState = self.getBlackState(state)
+            wrState = self.getPieceState(state, 2)
+
+            for sucesor in self.getListNextStatesB(blackState):
+                sucesor += self.eliminarWhite(whiteState, wrState, sucesor)
+                if not self.isWatchedBk(sucesor):
+                    valor = self.expectimax_recursive(sucesor, depth - 1, depthColor, True)
+                    if valor is not None:
+                        valores.append(valor)
+
+            if valores:
+                esperado = sum(valores) / len(valores)
+            else:
+                esperado = float('-inf')
+
+            if depth == depthColor:
+                # Elegimos el sucesor con valor esperado más alto
+                idx = valores.index(max(valores)) if valores else None
+                return self.getListNextStatesB(blackState)[idx] + self.eliminarWhite(whiteState, wrState, self.getListNextStatesB(blackState)[idx]) if idx is not None else None
+
+            return esperado
+
+    def expectimax_vs_alphabeta(self, depthWhite, depthBlack, playerTurn):
+        """
+        Ejecuta una partida donde las blancas usan Expectimax y las negras Alfa-Beta.
+        """
+        current_state = self.getCurrentState()
+        print("Estado inicial del tablero:")
+        self.chess.board.print_board()
+
+        while True:
+            # Comprobar si la partida terminó
+            if self.isCheckMate(current_state):
+                winner = "NEGRAS" if playerTurn else "BLANCAS"
+                print(f"JAQUE MATE, GANAN LAS {winner}")
+                return winner
+
+            depth = depthWhite if playerTurn else depthBlack
+
+            if playerTurn:  # Blancas: Expectimax
+                next_state = self.expectimax_recursive(current_state, depth, depth, True)
+            else:           # Negras: Alfa-Beta
+                next_state = self._minimax_recursive(current_state, depth, depth, False, True, -float('inf'), float('inf'))
+
+            if next_state is None:
+                winner = "NEGRAS" if playerTurn else "BLANCAS"
+                print(f"JAQUE MATE, GANAN LAS {winner}")
+                return winner
+
+            if self.isVisitedSituation(playerTurn, self.copyState(next_state)):
+                print("JUEGO EN TABLAS")
+                return "TABLAS"
+
+            self.listVisitedSituations.append((playerTurn, self.copyState(next_state)))
+            moved_piece, new_piece_pos = self.getMovement(current_state, self.copyState(next_state))
+            self.chess.move((moved_piece[0], moved_piece[1]), (new_piece_pos[0], new_piece_pos[1]))
+            self.chess.board.print_board()
+
+            current_state = self.getCurrentState()
+            playerTurn = not playerTurn
+    ### EX5 - expectimax ####
+        
     #### EX2 - CÁLCULO DE JUGADAS ####
 
     # En esta función se simula una partida completa sin imprimir nada por pantalla
-    def simulate_game(self, depthWhite, depthBlack, playerTurn, max_moves=100):
+    def simulate_game(self, depthWhite, depthBlack, playerTurn, max_moves=50):
         """
         Simula una partida de forma silenciosa y devuelve el ganador.
         'white', 'black', o 'draw'.
@@ -675,7 +819,62 @@ class Aichess():
         
         return 'draw' # Empate si se superan los movimientos máximos
     
-def run_and_plot_experiments(runs_per_combo=10):
+    def _minimax_recursive(self, state, depth, depthColor, playerTurn, use_alphabeta, alpha, beta):
+        """
+        Minimax recursivo con o sin poda alfa-beta.
+        Si use_alphabeta es True, activa la poda.
+        """
+        if depth == 0 or self.isCheckMate(state):
+            return self.heuristica(state, playerTurn)
+
+        best_state = None
+
+        if playerTurn:
+            max_eval = float('-inf')
+            blackState = self.getBlackState(state)
+            whiteState = self.getWhiteState(state)
+            brState = self.getPieceState(state, 8)
+
+            for successor in self.getListNextStatesW(whiteState):
+                successor += self.eliminarBlack(blackState, brState, successor)
+                if not self.isWatchedWk(successor):
+                    eval = self._minimax_recursive(successor, depth - 1, depthColor, False, use_alphabeta, alpha, beta)
+                    if isinstance(eval, list):  # Si eval es un estado, calcula su heurística
+                        eval = self.heuristica(eval, False)
+                    if eval > max_eval:
+                        max_eval = eval
+                        best_state = successor
+                    if use_alphabeta:
+                        alpha = max(alpha, eval)
+                        if beta <= alpha:
+                            break
+            if depth == depthColor:
+                return best_state
+            return max_eval
+        else:
+            min_eval = float('inf')
+            whiteState = self.getWhiteState(state)
+            blackState = self.getBlackState(state)
+            wrState = self.getPieceState(state, 2)
+
+            for successor in self.getListNextStatesB(blackState):
+                successor += self.eliminarWhite(whiteState, wrState, successor)
+                if not self.isWatchedBk(successor):
+                    eval = self._minimax_recursive(successor, depth - 1, depthColor, True, use_alphabeta, alpha, beta)
+                    if isinstance(eval, list):  # Si eval es un estado, calcula su heurística
+                        eval = self.heuristica(eval, True)
+                    if eval < min_eval:
+                        min_eval = eval
+                        best_state = successor
+                    if use_alphabeta:
+                        beta = min(beta, eval)
+                        if beta <= alpha:
+                            break
+            if depth == depthColor:
+                return best_state
+            return min_eval
+    
+def run_and_plot_experiments(runs_per_combo=3):
     """
     Ejecuta simulaciones para varias profundidades, calcula los porcentajes de victoria
     de las blancas y muestra un gráfico con los resultados.
@@ -728,58 +927,79 @@ def run_and_plot_experiments(runs_per_combo=10):
 
     plt.show()
 
-    ### EX3 - ALPHABETAPODA ####
+# --- Simulación y gráfico ---
+def run_expectimax_vs_alphabeta_experiments(runs_per_combo=3):
+    """
+    Simula partidas Expectimax (Blancas) vs Alfa-Beta (Negras) y grafica los resultados.
+    """
+    depths_to_test = [3, 4]
+    results_white = {}
+    results_black = {}
+    results_draw = {}
 
-    def alphaBetaPoda(self, depthWhite,depthBlack):
-        """
-        Gestiona una partida donde las Blancas usan Minimax y las Negras usan Alfa-Beta.
-        """
-        current_state = self.getCurrentState()
-        playerTurn = True  # Empiezan las blancas
-        print("Iniciando partida: Minimax (Blancas) vs Alfa-Beta (Negras)")
-        self.chess.board.print_board()
+    print(f"Simulando {runs_per_combo} partidas por combinación...")
 
-        while not self.isCheckMate(current_state):
-            depth = depthWhite if playerTurn else depthBlack
-            
-            # Decidir qué algoritmo usar
-            if playerTurn: # Turno de las Blancas -> Minimax (sin poda)
-                print("Turno de las Blancas (Minimax)...")
-                # Llamamos a la función recursiva sin activar la poda para este turno
-                next_state = self._minimax_recursive(current_state, depth, depth, True, False, -float('inf'), float('inf'))
-            else: # Turno de las Negras -> Alfa-Beta (con poda)
-                print("Turno de las Negras (Alfa-Beta)...")
-                # Llamamos a la función recursiva activando la poda para este turno
-                next_state = self._minimax_recursive(current_state, depth, depth, False, True, -float('inf'), float('inf'))
+    for dw in depths_to_test:
+        for db in depths_to_test:
+            config_key = f"W:{dw} vs B:{db}"
+            white_wins = 0
+            black_wins = 0
+            draws = 0
 
-            # --- Lógica de fin de partida y actualización del tablero ---
-            if next_state is None:
-                winner = "NEGRAS" if playerTurn else "BLANCAS"
-                print(f"JAQUE MATE, GANAN LAS {winner}")
-                return
+            for i in range(runs_per_combo):
+                TA = np.zeros((8, 8))
+                TA[7][0] = 2; TA[7][5] = 6  # Blancas
+                TA[0][7] = 8; TA[0][5] = 12 # Negras
+                game = Aichess(TA, True)
+                winner = game.expectimax_vs_alphabeta(dw, db, True)
+                if winner == "BLANCAS":
+                    white_wins += 1
+                elif winner == "NEGRAS":
+                    black_wins += 1
+                else:
+                    draws += 1
 
-            if self.isVisitedSituation(playerTurn, self.copyState(next_state)):
-                print("JUEGO EN TABLAS")
-                return
-            
-            self.listVisitedSituations.append((playerTurn, self.copyState(next_state)))
+            total_games = white_wins + black_wins + draws
+            if total_games == 0:
+                total_games = 1  # evitar división por cero
 
-            moved_piece, new_piece_pos = self.getMovement(current_state, self.copyState(next_state))
-            self.chess.move((moved_piece[0], moved_piece[1]), (new_piece_pos[0], new_piece_pos[1]))
-            self.chess.board.print_board()
+            results_white[config_key] = (white_wins / total_games) * 100
+            results_black[config_key] = (black_wins / total_games) * 100
+            results_draw[config_key] = (draws / total_games) * 100
+            print(f"  - {config_key}: Blancas {results_white[config_key]:.1f}%, Negras {results_black[config_key]:.1f}%, Tablas {results_draw[config_key]:.1f}%")
 
-            current_state = self.getCurrentState()
-            playerTurn = not playerTurn
-        
-        # Si el bucle termina, es porque el jugador actual está en jaque mate
-        winner = "NEGRAS" if playerTurn else "BLANCAS"
-        print(f"JAQUE MATE, GANAN LAS {winner}")
-        
-    def expectimax(self, depthWhite, depthBlack):
-        
-        currentState = self.getCurrentState()
-        # Your code here       
-        
+    # Graficar
+    labels = list(results_white.keys())
+    white_values = list(results_white.values())
+    black_values = list(results_black.values())
+    draw_values = list(results_draw.values())
+
+    x = np.arange(len(labels))
+    width = 0.25
+
+    fig, ax = plt.subplots(figsize=(12, 6))
+    bars_white = ax.bar(x - width, white_values, width, label='Blancas', color='lightblue')
+    bars_black = ax.bar(x, black_values, width, label='Negras', color='lightcoral')
+    bars_draw = ax.bar(x + width, draw_values, width, label='Tablas', color='lightgray')
+
+    ax.set_ylabel('Porcentaje de Resultados (%)')
+    ax.set_title('Expectimax (Blancas) vs Alfa-Beta (Negras)')
+    ax.set_xticks(x)
+    ax.set_xticklabels(labels)
+    ax.set_ylim(0, 100)
+    ax.legend()
+
+    for bars in [bars_white, bars_black, bars_draw]:
+        for bar in bars:
+            height = bar.get_height()
+            ax.annotate(f'{height:.1f}%',
+                        xy=(bar.get_x() + bar.get_width() / 2, height),
+                        xytext=(0, 3),
+                        textcoords="offset points",
+                        ha='center', va='bottom')
+
+    plt.show()
+
 
 if __name__ == "__main__":
     # if len(sys.argv) < 2:
@@ -805,5 +1025,8 @@ if __name__ == "__main__":
     # Run exercise 1
     #aichess.minimaxGame(3,3,True)
     # Run exercise 2
-    run_and_plot_experiments(runs_per_combo=3)
+    #run_and_plot_experiments(runs_per_combo=3)
+
+    # Run exercise 5
+    run_expectimax_vs_alphabeta_experiments(runs_per_combo=3)
     
