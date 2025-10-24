@@ -16,6 +16,7 @@ import numpy as np
 import sys
 import queue
 from typing import List
+import matplotlib.pyplot as plt
 
 RawStateType = List[List[List[int]]]
 
@@ -634,11 +635,145 @@ class Aichess():
             return maxState
 
         return currBestValue
+    
+    #### EX1 - MINIMAXGAME() ####
+
+    #### EX2 - CÁLCULO DE JUGADAS ####
+
+    # En esta función se simula una partida completa sin imprimir nada por pantalla
+    def simulate_game(self, depthWhite, depthBlack, playerTurn, max_moves=100):
+        """
+        Simula una partida de forma silenciosa y devuelve el ganador.
+        'white', 'black', o 'draw'.
+        """
+        self.listVisitedSituations = []
+        current_state = self.getCurrentState()
+        move_count = 0
+
+        while move_count < max_moves:
+            if self.isCheckMate(current_state):
+                return 'black' if playerTurn else 'white'
+
+            depth = depthWhite if playerTurn else depthBlack
+            next_state = self.minimax(current_state, depth, depth, playerTurn)
+
+            if next_state is None:
+                return 'black' if playerTurn else 'white'
+
+            if self.isVisitedSituation(playerTurn, self.copyState(next_state)):
+                return 'draw'
+            
+            self.listVisitedSituations.append((playerTurn, self.copyState(next_state)))
+
+            # Actualizar el estado sin imprimir
+            moved_piece, new_piece_pos = self.getMovement(current_state, self.copyState(next_state))
+            self.chess.move((moved_piece[0], moved_piece[1]), (new_piece_pos[0], new_piece_pos[1]))
+            
+            current_state = self.getCurrentState()
+            playerTurn = not playerTurn
+            move_count += 1
+        
+        return 'draw' # Empate si se superan los movimientos máximos
+    
+def run_and_plot_experiments(runs_per_combo=10):
+    """
+    Ejecuta simulaciones para varias profundidades, calcula los porcentajes de victoria
+    de las blancas y muestra un gráfico con los resultados.
+    """
+
+    depths_to_test = [3, 4]
+    results = {}
+    
+    print(f"Iniciando experimentos ({runs_per_combo} partidas por combinación)...")
+
+    for dw in depths_to_test:
+        for db in depths_to_test:
+            config_key = f"W:{dw} vs B:{db}"
+            white_wins = 0
+            
+            for i in range(runs_per_combo):
+                # Crear un tablero y un juego nuevos para cada partida para asegurar un estado limpio
+                TA = np.zeros((8, 8))
+                TA[7][0] = 2; TA[7][5] = 6  # Piezas blancas
+                TA[0][7] = 8; TA[0][5] = 12 # Piezas negras
+                game = Aichess(TA, True)
+                winner = game.simulate_game(dw, db, True)
+            if winner == 'white':
+                white_wins += 1
+            
+        # Calcular y guardar el porcentaje de victorias
+        win_percentage = (white_wins / runs_per_combo) * 100
+        results[config_key] = win_percentage
+        print(f"  - {config_key}: {win_percentage:.1f}% de victorias para las blancas.")
+
+    # --- Graficar los resultados ---
+    labels = list(results.keys())
+    values = list(results.values())
+
+    fig, ax = plt.subplots(figsize=(10, 6))
+    bars = ax.bar(labels, values, color=['lightblue', 'lightgreen', 'blue', 'green'])
+    
+    ax.set_ylabel('Porcentaje de Victorias Blancas (%)')
+    ax.set_title('Rendimiento de Minimax con Diferentes Profundidades')
+    ax.set_ylim(0, 100)
+
+    # Añadir etiquetas de porcentaje encima de cada barra
+    for bar in bars:
+        height = bar.get_height()
+        ax.annotate(f'{height:.1f}%',
+                    xy=(bar.get_x() + bar.get_width() / 2, height),
+                    xytext=(0, 3),  # 3 puntos de offset vertical
+                    textcoords="offset points",
+                    ha='center', va='bottom')
+
+    plt.show()
+
+    ### EX3 - ALPHABETAPODA ####
 
     def alphaBetaPoda(self, depthWhite,depthBlack):
+        """
+        Gestiona una partida donde las Blancas usan Minimax y las Negras usan Alfa-Beta.
+        """
+        current_state = self.getCurrentState()
+        playerTurn = True  # Empiezan las blancas
+        print("Iniciando partida: Minimax (Blancas) vs Alfa-Beta (Negras)")
+        self.chess.board.print_board()
+
+        while not self.isCheckMate(current_state):
+            depth = depthWhite if playerTurn else depthBlack
+            
+            # Decidir qué algoritmo usar
+            if playerTurn: # Turno de las Blancas -> Minimax (sin poda)
+                print("Turno de las Blancas (Minimax)...")
+                # Llamamos a la función recursiva sin activar la poda para este turno
+                next_state = self._minimax_recursive(current_state, depth, depth, True, False, -float('inf'), float('inf'))
+            else: # Turno de las Negras -> Alfa-Beta (con poda)
+                print("Turno de las Negras (Alfa-Beta)...")
+                # Llamamos a la función recursiva activando la poda para este turno
+                next_state = self._minimax_recursive(current_state, depth, depth, False, True, -float('inf'), float('inf'))
+
+            # --- Lógica de fin de partida y actualización del tablero ---
+            if next_state is None:
+                winner = "NEGRAS" if playerTurn else "BLANCAS"
+                print(f"JAQUE MATE, GANAN LAS {winner}")
+                return
+
+            if self.isVisitedSituation(playerTurn, self.copyState(next_state)):
+                print("JUEGO EN TABLAS")
+                return
+            
+            self.listVisitedSituations.append((playerTurn, self.copyState(next_state)))
+
+            moved_piece, new_piece_pos = self.getMovement(current_state, self.copyState(next_state))
+            self.chess.move((moved_piece[0], moved_piece[1]), (new_piece_pos[0], new_piece_pos[1]))
+            self.chess.board.print_board()
+
+            current_state = self.getCurrentState()
+            playerTurn = not playerTurn
         
-        currentState = self.getCurrentState()
-        # Your code here  
+        # Si el bucle termina, es porque el jugador actual está en jaque mate
+        winner = "NEGRAS" if playerTurn else "BLANCAS"
+        print(f"JAQUE MATE, GANAN LAS {winner}")
         
     def expectimax(self, depthWhite, depthBlack):
         
@@ -668,5 +803,7 @@ if __name__ == "__main__":
     aichess.chess.boardSim.print_board()
     
     # Run exercise 1
-    aichess.minimaxGame(3,3,True)
-    # Add code to save results and continue with other exercises
+    #aichess.minimaxGame(3,3,True)
+    # Run exercise 2
+    run_and_plot_experiments(runs_per_combo=3)
+    
